@@ -1,0 +1,49 @@
+# Environment
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+frontend/.env.local
+
+# Model weights (large files — use Git LFS or just don't commit)
+fine_tuning/results/
+fine_tuning/data/train.jsonl
+fine_tuning/data/eval.jsonl
+*.bin
+*.safetensors
+*.gguf
+*.pt
+*.pth
+
+# Docker volumes
+postgres_data/
+qdrant_data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
