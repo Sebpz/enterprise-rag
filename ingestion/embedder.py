@@ -5,14 +5,11 @@ Supports local (sentence-transformers) and OpenAI embeddings.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Literal
 
 import numpy as np
-
-# TODO: pip install sentence-transformers openai
-# from sentence_transformers import SentenceTransformer
-# from openai import AsyncOpenAI
 
 
 # The embedding model name is stored with every vector in Qdrant.
@@ -64,7 +61,14 @@ class Embedder:
         For "openai":
             return AsyncOpenAI()  # client — model name passed at call time
         """
-        raise NotImplementedError("TODO: implement _load_model")
+        if config["provider"] == "sentence-transformers":
+            from sentence_transformers import SentenceTransformer
+            return SentenceTransformer(config["name"])
+        elif config["provider"] == "openai":
+            from openai import AsyncOpenAI
+            return AsyncOpenAI()
+        else:
+            raise ValueError(f"Unknown embedding provider: {config['provider']!r}")
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """
@@ -76,7 +80,41 @@ class Embedder:
         - Normalise vectors to unit length (important for cosine similarity)
         - Handle rate limits / retries for OpenAI
         """
-        raise NotImplementedError("TODO: implement embed_batch")
+        if self._provider == "sentence-transformers":
+            loop = asyncio.get_running_loop()
+            vectors = await loop.run_in_executor(
+                None,
+                lambda: self._model.encode(
+                    texts,
+                    batch_size=64,
+                    show_progress_bar=False,
+                    normalize_embeddings=True,
+                ),
+            )
+            return [v.tolist() for v in vectors]
+
+        elif self._provider == "openai":
+            import openai
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    response = await self._model.embeddings.create(
+                        input=texts,
+                        model=self.model_version,
+                    )
+                    vectors = [item.embedding for item in response.data]
+                    normalized = []
+                    for v in vectors:
+                        arr = np.array(v)
+                        normalized.append((arr / np.linalg.norm(arr)).tolist())
+                    return normalized
+                except openai.RateLimitError:
+                    if attempt == max_retries - 1:
+                        raise
+                    await asyncio.sleep(2 ** attempt)
+
+        else:
+            raise ValueError(f"Unknown embedding provider: {self._provider!r}")
 
     async def embed_query(self, text: str) -> list[float]:
         """Embed a single query string. Used at retrieval time."""

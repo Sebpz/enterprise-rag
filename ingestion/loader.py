@@ -58,7 +58,43 @@ class ArxivLoader:
         Tip: The full dataset is large (~30GB). streaming=True is essential.
         For development, set limit=1000 and test with a small sample first.
         """
-        raise NotImplementedError("TODO: implement stream()")
+        from datasets import load_dataset
+
+        try:
+            ds = load_dataset(
+                "arxiv_dataset",
+                split="train",
+                streaming=True,
+                trust_remote_code=True,
+            )
+
+            if categories is not None:
+                ds = ds.filter(
+                    lambda record: any(cat in record["categories"] for cat in categories)
+                )
+
+            ds = ds.filter(
+                lambda record: record["update_date"][:4] >= str(start_year)
+            )
+
+            count = 0
+            for record in ds:
+                if count >= limit:
+                    break
+                yield {
+                    "id": record["id"],
+                    "title": record["title"],
+                    "abstract": record["abstract"],
+                    "authors": record["authors_parsed"],
+                    "categories": record["categories"],
+                    "published_date": record["update_date"][:10],
+                }
+                count += 1
+                if count % 1000 == 0:
+                    logger.info("Loaded %d papers...", count)
+        except Exception:
+            logger.exception("Failed to load arxiv_dataset")
+            raise
 
     def load_sample(self, n: int = 100) -> list[dict]:
         """Load a small sample synchronously — useful for testing."""
