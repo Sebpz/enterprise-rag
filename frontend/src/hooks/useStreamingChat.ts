@@ -12,6 +12,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import { API_URL, API_KEY } from "../lib/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type MessageRole = "user" | "assistant";
@@ -50,7 +51,7 @@ type SSEEvent =
   | { type: "error";      detail: string };
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
-export function useStreamingChat(apiKey: string = "dev-key-local") {
+export function useStreamingChat(apiKey: string = API_KEY) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [mode, setMode] = useState<ChatMode>("rag");
@@ -60,7 +61,6 @@ export function useStreamingChat(apiKey: string = "dev-key-local") {
     async (query: string) => {
       if (isStreaming) return;
 
-      // Add user message
       const userMsg: Message = {
         id: crypto.randomUUID(),
         role: "user",
@@ -70,9 +70,9 @@ export function useStreamingChat(apiKey: string = "dev-key-local") {
         isStreaming: false,
       };
 
-      // Add empty assistant message that will be filled by stream
+      const assistantId = crypto.randomUUID();
       const assistantMsg: Message = {
-        id: crypto.randomUUID(),
+        id: assistantId,
         role: "assistant",
         content: "",
         citations: [],
@@ -83,43 +83,65 @@ export function useStreamingChat(apiKey: string = "dev-key-local") {
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
 
-      // TODO: construct the SSE URL
-      // const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/v1/chat`);
-      // url.searchParams.set("query", query);
-      // url.searchParams.set("mode", mode);
-      //
-      // Note: EventSource doesn't support custom headers.
-      // Options:
-      //   1. Pass API key as a query param (simpler, fine for local dev)
-      //   2. Use fetch() with ReadableStream instead (more flexible, better for prod)
-      //   See: https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#reading_a_response_body_as_a_stream
+      const url = new URL(`${API_URL}/v1/chat`);
+      url.searchParams.set("query", query);
+      url.searchParams.set("mode", mode);
+      url.searchParams.set("stream", "true");
+      url.searchParams.set("api_key", apiKey);
 
-      // TODO: open EventSource and handle events
-      // const es = new EventSource(url.toString());
-      // eventSourceRef.current = es;
-      //
-      // es.onmessage = (event) => {
-      //   const data: SSEEvent = JSON.parse(event.data);
-      //
-      //   if (data.type === "token") {
-      //     setMessages((prev) => {
-      //       const updated = [...prev];
-      //       const last = { ...updated[updated.length - 1] };
-      //       last.content += data.content;
-      //       updated[updated.length - 1] = last;
-      //       return updated;
-      //     });
-      //   }
-      //
-      //   if (data.type === "citations") { ... }
-      //   if (data.type === "agent_step") { ... }
-      //   if (data.type === "done") { es.close(); setIsStreaming(false); }
-      //   if (data.type === "error") { ... }
-      // };
-      //
-      // es.onerror = () => { es.close(); setIsStreaming(false); };
+      const es = new EventSource(url.toString());
+      eventSourceRef.current = es;
 
-      throw new Error("TODO: implement sendMessage");
+      const updateLast = (updater: (msg: Message) => Message) => {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const idx = updated.findLastIndex((m) => m.id === assistantId);
+          if (idx === -1) return prev;
+          updated[idx] = updater(updated[idx]);
+          return updated;
+        });
+      };
+
+      es.onmessage = (event) => {
+        let data: SSEEvent;
+        try {
+          data = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+
+        if (data.type === "token") {
+          updateLast((msg) => ({ ...msg, content: msg.content + data.content }));
+        } else if (data.type === "citations") {
+          updateLast((msg) => ({ ...msg, citations: data.data }));
+        } else if (data.type === "agent_step") {
+          updateLast((msg) => ({
+            ...msg,
+            agentSteps: [
+              ...msg.agentSteps,
+              { node: data.node, output: data.output, tool_call: data.tool_call },
+            ],
+          }));
+        } else if (data.type === "done") {
+          updateLast((msg) => ({ ...msg, isStreaming: false, traceId: data.trace_id }));
+          es.close();
+          setIsStreaming(false);
+        } else if (data.type === "error") {
+          updateLast((msg) => ({ ...msg, isStreaming: false, error: data.detail }));
+          es.close();
+          setIsStreaming(false);
+        }
+      };
+
+      es.onerror = () => {
+        updateLast((msg) => ({
+          ...msg,
+          isStreaming: false,
+          error: msg.content ? undefined : "Connection error",
+        }));
+        es.close();
+        setIsStreaming(false);
+      };
     },
     [isStreaming, mode, apiKey]
   );
@@ -127,6 +149,14 @@ export function useStreamingChat(apiKey: string = "dev-key-local") {
   const stopStreaming = useCallback(() => {
     eventSourceRef.current?.close();
     setIsStreaming(false);
+    setMessages((prev) => {
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last?.isStreaming) {
+        updated[updated.length - 1] = { ...last, isStreaming: false };
+      }
+      return updated;
+    });
   }, []);
 
   const clearMessages = useCallback(() => {

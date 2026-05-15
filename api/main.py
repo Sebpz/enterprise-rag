@@ -76,10 +76,26 @@ async def global_error_handler(request: Request, exc: Exception):
 
 @app.on_event("startup")
 async def startup():
-    logger.info("🚀 Enterprise RAG Platform starting up")
-    # TODO: initialise Qdrant client, warm up embedding model, connect to Postgres
+    logger.info("Enterprise RAG Platform starting up")
+    try:
+        from ingestion.embedder import Embedder
+        embedder = Embedder()
+        await embedder.embed_query("warmup")
+        logger.info("Embedding model warmed up (%s)", embedder.model_version)
+    except Exception as e:
+        logger.warning("Embedding warm-up failed (non-fatal): %s", e)
+
 
 @app.on_event("shutdown")
 async def shutdown():
     logger.info("Shutting down")
-    # TODO: close DB connections, flush Langfuse queue
+    try:
+        import api.routes.chat as chat_module
+        if chat_module._rag_pipeline is not None:
+            await chat_module._rag_pipeline.close()
+            logger.info("RAG pipeline (Qdrant) closed")
+    except Exception as e:
+        logger.warning("Error closing RAG pipeline: %s", e)
+    from api.middleware.ratelimit import close_redis
+    await close_redis()
+    logger.info("Redis connection closed")
