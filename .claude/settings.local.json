@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit *)",
+      "Bash(git config *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\USER\\\\Desktop\\\\enterprise-rag\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\USER\\\\Desktop\\\\enterprise-rag\" -Recurse -File -Filter \"*.py\" -o \"*.ts\" -o \"*.tsx\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Test-Path *)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --app --yes --no-git)",
+      "Bash(npx create-next-app@latest frontend-scaffold --typescript --tailwind --app --yes --no-git)",
+      "Bash(cp \"C:\\\\Users\\\\USER\\\\Desktop\\\\enterprise-rag\\\\frontend-scaffold\\\\next.config.ts\" \"C:\\\\Users\\\\USER\\\\Desktop\\\\enterprise-rag\\\\frontend\\\\\" && cp \"C:\\\\Users\\\\USER\\\\Desktop\\\\enterprise-rag\\\\frontend-scaffold\\\\tsconfig.json\" \"C:\\\\Users\\\\USER\\\\Desktop\\\\enterprise-rag\\\\frontend\\\\\")",
+      "Bash(cp \"C:\\\\Users\\\\USER\\\\Desktop\\\\enterprise-rag\\\\frontend-scaffold\\\\postcss.config.mjs\" \"C:\\\\Users\\\\USER\\\\Desktop\\\\enterprise-rag\\\\frontend\\\\\" && cp \"C:\\\\Users\\\\USER\\\\Desktop\\\\enterprise-rag\\\\frontend-scaffold\\\\eslint.config.mjs\" \"C:\\\\Users\\\\USER\\\\Desktop\\\\enterprise-rag\\\\frontend\\\\\")",
+      "PowerShell(Copy-Item *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "PowerShell(Remove-Item *)",
+      "Bash(git add *)"
+    ]
+  }
+}
